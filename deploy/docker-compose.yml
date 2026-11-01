@@ -25,6 +25,7 @@ services:
       - "8787"
     volumes:
       - ./data:/data
+      - ./assets:/app/assets
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/healthz"]
       interval: 30s

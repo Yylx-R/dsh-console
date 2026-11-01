@@ -340,12 +340,28 @@ export function createHttp({ db, hub, cfg }) {
         if (!row) return sendJson(res, 404, { error: 'blob/not-found' })
         const file = join(cfg.blobDir, row.storage_key)
         const info = await stat(file)
-        res.writeHead(200, {
+        const headers = {
           'content-type': 'application/octet-stream',
-          'content-length': info.size,
           'x-sha256': row.sha256 || '',
           'x-name': encodeURIComponent(row.name || ''),
-        })
+          'accept-ranges': 'bytes',
+        }
+        const range = String(req.headers.range || '').trim()
+        const m = /^bytes=(\d*)-(\d*)$/.exec(range)
+        if (m) {
+          const start = m[1] === '' ? 0 : Number(m[1])
+          let end = m[1] === '' || m[2] === '' ? info.size - 1 : Number(m[2])
+          if (!Number.isFinite(start) || start < 0 || start >= info.size) {
+            res.writeHead(416, { ...headers, 'content-range': `bytes */${info.size}` })
+            res.end()
+            return
+          }
+          end = Math.min(end, info.size - 1)
+          res.writeHead(206, { ...headers, 'content-length': end - start + 1, 'content-range': `bytes ${start}-${end}/${info.size}` })
+          await pipeline(createReadStream(file, { start, end }), res)
+          return
+        }
+        res.writeHead(200, { ...headers, 'content-length': info.size })
         await pipeline(createReadStream(file), res)
         return
       }

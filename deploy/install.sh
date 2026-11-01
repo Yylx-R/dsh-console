@@ -62,7 +62,7 @@ systemctl enable --now docker >/dev/null 2>&1 || true
 
 # ---------- 2. 配置 ----------
 cd "$DIR/deploy"
-mkdir -p data
+mkdir -p data assets
 
 # 防撞车：同名 compose 项目会互相顶掉容器（数据卷也跟着换目录）
 PROJECT="${COMPOSE_PROJECT_NAME:-dsh-console}"

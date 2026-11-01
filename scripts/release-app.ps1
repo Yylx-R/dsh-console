@@ -1,4 +1,4 @@
-﻿# 一键发布手机 App
+# 一键发布手机 App
 #   1) 读 app/build.gradle.kts 里的 versionName / versionCode
 #   2) 编译 debug APK
 #   3) 生成 public/app/latest.json（App 内「检查更新」读这个文件）
@@ -54,7 +54,7 @@ Copy-Item $srcApk $apk -Force
 $json = [ordered]@{
     versionName = $versionName
     versionCode = [int]$versionCode
-    url         = "/$apkName"
+    url         = "/app/$apkName"
     size        = (Get-Item $apk).Length
     sha256      = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
     notes       = $Notes
@@ -68,9 +68,10 @@ New-Item -ItemType Directory -Force $manifestDir | Out-Null
 # 服务器目录与容器名可用环境变量覆盖（历史部署叫 dsh-remote，新部署叫 dsh-console）
 $remoteDir = if ($env:RELAY_DIR) { $env:RELAY_DIR } else { '/opt/dsh-remote' }
 $container = if ($env:RELAY_CONTAINER) { $env:RELAY_CONTAINER } else { 'dsh-remote-relay-1' }
-scp -o StrictHostKeyChecking=no -i $SshKey $apk "root@${Server}:$remoteDir/relay/public/" | Out-Null
-scp -o StrictHostKeyChecking=no -i $SshKey "$manifestDir\latest.json" "root@${Server}:$remoteDir/relay/public/app/" | Out-Null
-ssh -o StrictHostKeyChecking=no -i $SshKey "root@$Server" "docker cp $remoteDir/relay/public/$apkName ${container}:/app/public/ ; docker exec $container mkdir -p /app/public/app ; docker cp $remoteDir/relay/public/app/latest.json ${container}:/app/public/app/latest.json ; echo PUBLISHED"
+ssh -o StrictHostKeyChecking=no -i $SshKey "root@$Server" "mkdir -p $remoteDir/assets" | Out-Null
+scp -o StrictHostKeyChecking=no -i $SshKey $apk "root@${Server}:$remoteDir/assets/" | Out-Null
+scp -o StrictHostKeyChecking=no -i $SshKey "$manifestDir\latest.json" "root@${Server}:$remoteDir/assets/latest.json" | Out-Null
+ssh -o StrictHostKeyChecking=no -i $SshKey "root@$Server" "ls -l $remoteDir/assets/$apkName && echo PUBLISHED"
 
 Write-Host "完成：http://$Server/$apkName"
 Write-Host "手机上打开 App → 设置 → 应用更新 → 检查更新，即可安装。"
