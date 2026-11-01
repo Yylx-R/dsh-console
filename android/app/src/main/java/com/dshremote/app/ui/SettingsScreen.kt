@@ -117,6 +117,16 @@ fun SettingsScreen(vm: AppViewModel, st: UiState) {
                         }
                     }
                 }
+                if (st.update != null) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { vm.installViaBrowser() }) {
+                            Text("装不上？用浏览器下载安装", fontSize = 12.sp)
+                        }
+                    }
+                }
                 InfoRow("协议", "DSH Console v0.2")
                 Text(
                     "手机通过你自己的中继服务器连接家里的电脑。会话、消息和文件都只经过这台服务器，不会上传到第三方。",

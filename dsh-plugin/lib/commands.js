@@ -2,7 +2,12 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile, readFile, stat } from 'node:fs/promises'
 import { join, basename, extname } from 'node:path'
-import { listFiles, resolveInside, guessMime } from './files.js'
+
+// files.js 是静态导入的话，插件热加载只会重载 commands.js，files.js 的新代码不会生效
+// （Node 按 URL 缓存模块）。这里改成带版本号的动态导入，改完立刻生效。
+async function filesLib() {
+  return import(`./files.js?v=${Date.now()}`)
+}
 
 const MAX_TEXT = 200_000
 const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
@@ -392,12 +397,43 @@ export function createCommandRouter({ ctx, log, client, cfg, follows = new Map()
         case 'files.list': {
           const cwd = await sessionCwd(body)
           const max = Math.min(500, Math.max(20, Number(body.max) || 200))
+          const { listFiles } = await filesLib()
           const items = await listFiles(cwd, { max })
           return reply({ cwd, items })
         }
 
+        // 交付物总览：按会话分组，最近更新的会话在前（会话列表页右上角入口用）
+        case 'files.overview': {
+          const { listFiles } = await filesLib()
+          const limitSessions = Math.min(30, Math.max(1, Number(body.sessions) || 12))
+          const perSession = Math.min(100, Math.max(5, Number(body.max) || 40))
+          const list = await sc().list({}, AbortSignal.timeout(15_000))
+          const items = (Array.isArray(list?.items) ? list.items : [])
+            .map(summaryOf)
+            .filter((s) => s.cwd)
+            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+            .slice(0, limitSessions)
+          const groups = []
+          for (const s of items) {
+            let files = []
+            try {
+              files = await listFiles(s.cwd, { max: perSession })
+            } catch {}
+            if (!files.length) continue
+            groups.push({
+              sessionId: s.sessionId,
+              title: s.title,
+              cwd: s.cwd,
+              updatedAt: s.updatedAt,
+              files,
+            })
+          }
+          return reply({ groups })
+        }
+
         case 'files.send': {
           const cwd = await sessionCwd(body)
+          const { resolveInside, guessMime } = await filesLib()
           const abs = resolveInside(cwd, body.path)
           const st = await stat(abs).catch(() => null)
           if (!st || !st.isFile()) throw Object.assign(new Error('文件不存在'), { code: 'files/not-found' })

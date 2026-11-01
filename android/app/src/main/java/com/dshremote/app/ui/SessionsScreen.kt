@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +55,13 @@ fun SessionsScreen(vm: AppViewModel, st: UiState) {
             subtitle = if (target?.peerOnline == true) "在线 · 选择会话" else "离线 · 选择会话",
             onBack = vm::back,
             actions = {
+                IconButton(onClick = vm::openOverview) {
+                    Icon(
+                        Icons.Outlined.Folder,
+                        contentDescription = "交付物",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (st.refreshingSessions) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp).padding(end = 12.dp),

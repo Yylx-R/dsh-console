@@ -54,11 +54,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -152,6 +154,13 @@ fun ChatScreen(vm: AppViewModel, st: UiState) {
             onTitleLongPress = { copyText(st.currentSession?.sessionId.orEmpty()) },
             onSubtitleLongPress = { copyText(st.currentSession?.cwd.orEmpty()) },
             actions = {
+                IconButton(onClick = vm::openFiles) {
+                    Icon(
+                        Icons.Outlined.Folder,
+                        contentDescription = "交付物",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (st.streaming) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp).padding(end = 14.dp),
@@ -552,7 +561,6 @@ private fun InputBar(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         QuickChip("刷新会话") { onRefresh() }
-                        QuickChip("交付物") { onOpenFiles() }
                         if (st.streaming) QuickChip("停止任务", danger = true) { onStop() }
                     }
                 }

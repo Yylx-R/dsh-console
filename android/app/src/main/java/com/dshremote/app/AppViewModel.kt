@@ -44,6 +44,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 
 const val DEFAULT_SERVER = ""
 
@@ -103,6 +104,9 @@ data class UiState(
     val filesCwd: String = "",
     val files: List<RemoteFile> = emptyList(),
     val filesBusy: String? = null,
+    /** true = 总览模式（按会话分组，从会话列表右上角进入） */
+    val filesOverview: Boolean = false,
+    val fileGroups: List<FileGroup> = emptyList(),
 )
 
 /** 电脑上可下发的文件 */
@@ -111,6 +115,16 @@ data class RemoteFile(
     val name: String,
     val size: Long,
     val mtime: Long,
+    val kind: String = "other",
+)
+
+/** 交付物总览里的一组（一个会话） */
+data class FileGroup(
+    val sessionId: String,
+    val title: String?,
+    val cwd: String,
+    val updatedAt: Long,
+    val files: List<RemoteFile>,
 )
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -306,6 +320,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------- 登录 ----------
+    /** 装不上时的兜底：把安装包链接丢给系统浏览器（各家 ROM 对浏览器下载的 APK 更宽容） */
+    fun installViaBrowser() {
+        val url = _state.value.update?.url ?: return
+        runCatching {
+            val ctx = getApplication<Application>()
+            ctx.startActivity(
+                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.onFailure { _state.update { it.copy(toast = "无法打开浏览器：${it.toast ?: ""}") } }
+    }
+
     fun login() {
         val st = _state.value
         if (st.busy) return
@@ -702,7 +728,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ── 交付物：浏览并取回电脑会话目录里的文件 ──
 
     fun openFiles() {
-        _state.update { it.copy(filesOpen = true) }
+        _state.update { it.copy(filesOpen = true, filesOverview = false, fileGroups = emptyList()) }
+        refreshFiles()
+    }
+
+    /** 会话列表右上角：按会话分组的总览 */
+    fun openOverview() {
+        _state.update { it.copy(filesOpen = true, filesOverview = true, files = emptyList(), filesCwd = "") }
         refreshFiles()
     }
 
@@ -710,21 +742,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshFiles() {
         val st = _state.value
-        val session = st.currentSession ?: return
         if (st.filesLoading) return
+        if (st.filesOverview) {
+            refreshOverview()
+            return
+        }
+        val session = st.currentSession ?: return
         viewModelScope.launch {
             _state.update { it.copy(filesLoading = true) }
             try {
                 val res = ask("files.list", buildJson("sessionId" to session.sessionId), 30_000)
-                val list = (res["items"] as? JsonArray)?.mapNotNull { el ->
-                    val o = el as? JsonObject ?: return@mapNotNull null
-                    RemoteFile(
-                        path = o.str("path") ?: return@mapNotNull null,
-                        name = o.str("name") ?: "",
-                        size = o.long("size") ?: 0L,
-                        mtime = o.long("mtime") ?: 0L,
-                    )
-                } ?: emptyList()
+                val list = (res["items"] as? JsonArray)?.mapNotNull { el -> parseFile(el) } ?: emptyList()
                 _state.update { it.copy(files = list, filesLoading = false, filesCwd = res.str("cwd") ?: "") }
             } catch (e: Exception) {
                 _state.update { it.copy(filesLoading = false, toast = e.message) }
@@ -732,15 +760,49 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun downloadFile(f: RemoteFile) {
+    private fun refreshOverview() {
+        viewModelScope.launch {
+            _state.update { it.copy(filesLoading = true) }
+            try {
+                val res = ask("files.overview", buildJson("sessions" to 15, "max" to 60), 60_000)
+                val groups = (res["groups"] as? JsonArray)?.mapNotNull { el ->
+                    val o = el as? JsonObject ?: return@mapNotNull null
+                    val sid = o.str("sessionId") ?: return@mapNotNull null
+                    FileGroup(
+                        sessionId = sid,
+                        title = o.str("title"),
+                        cwd = o.str("cwd") ?: "",
+                        updatedAt = o.long("updatedAt") ?: 0L,
+                        files = (o["files"] as? JsonArray)?.mapNotNull { parseFile(it) } ?: emptyList(),
+                    )
+                } ?: emptyList()
+                _state.update { it.copy(fileGroups = groups, filesLoading = false) }
+            } catch (e: Exception) {
+                _state.update { it.copy(filesLoading = false, toast = e.message) }
+            }
+        }
+    }
+
+    private fun parseFile(el: JsonElement): RemoteFile? {
+        val o = el as? JsonObject ?: return null
+        return RemoteFile(
+            path = o.str("path") ?: return null,
+            name = o.str("name") ?: "",
+            size = o.long("size") ?: 0L,
+            mtime = o.long("mtime") ?: 0L,
+            kind = o.str("kind") ?: "other",
+        )
+    }
+
+    fun downloadFile(f: RemoteFile, sessionId: String? = null) {
         val st = _state.value
-        val session = st.currentSession ?: return
+        val sid = sessionId ?: st.currentSession?.sessionId ?: return
         if (st.filesBusy != null) return
         viewModelScope.launch {
             _state.update { it.copy(filesBusy = f.path) }
             try {
                 val token = st.token ?: throw ApiException("未登录")
-                val res = ask("files.send", buildJson("sessionId" to session.sessionId, "path" to f.path), 180_000)
+                val res = ask("files.send", buildJson("sessionId" to sid, "path" to f.path), 180_000)
                 val blobId = res.str("blobId") ?: throw ApiException("取回失败")
                 val bytes = api.downloadBlob(st.serverUrl, token, blobId)
                 val dir = File(getApplication<Application>().filesDir, "deliveries").apply { mkdirs() }

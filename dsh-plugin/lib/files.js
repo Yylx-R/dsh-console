@@ -35,6 +35,25 @@ export function guessMime(name) {
   return MIME[extname(String(name || '')).toLowerCase()] || 'application/octet-stream'
 }
 
+const KIND_BY_EXT = {
+  sheet: ['.xlsx', '.xls', '.csv', '.tsv', '.ods'],
+  doc: ['.doc', '.docx', '.pdf', '.md', '.txt', '.rtf', '.pptx', '.ppt', '.odt', '.epub'],
+  image: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.heic'],
+  archive: ['.zip', '.rar', '.7z', '.tar', '.gz', '.tgz', '.xz'],
+  code: ['.js', '.mjs', '.ts', '.py', '.java', '.kt', '.json', '.html', '.css', '.sh', '.ps1', '.sql', '.yml', '.yaml', '.xml', '.toml', '.ini'],
+  media: ['.mp4', '.mov', '.mkv', '.mp3', '.wav', '.webm', '.flac'],
+  apk: ['.apk', '.aab'],
+}
+
+// 交付物分类：手机端按这个分组显示
+export function kindOf(name) {
+  const ext = extname(String(name || '')).toLowerCase()
+  for (const [kind, list] of Object.entries(KIND_BY_EXT)) {
+    if (list.includes(ext)) return kind
+  }
+  return 'other'
+}
+
 // 递归列出文件（默认两层），按修改时间倒序 —— 刚生成的交付物排在最前
 export async function listFiles(root, { depth = 2, max = 300 } = {}) {
   const base = resolve(String(root || '.'))
@@ -63,6 +82,7 @@ export async function listFiles(root, { depth = 2, max = 300 } = {}) {
             size: st.size,
             mtime: Math.round(st.mtimeMs),
             mime: guessMime(e.name),
+            kind: kindOf(e.name),
           })
         } catch {}
       }
