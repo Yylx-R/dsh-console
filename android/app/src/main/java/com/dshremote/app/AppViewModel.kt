@@ -802,17 +802,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (st.filesBusy != null) return
         viewModelScope.launch {
             _state.update { it.copy(filesBusy = f.path) }
+            android.util.Log.d("DshRemote", "downloadFile 开始：${f.name} session=$sid")
             try {
                 val token = st.token ?: throw ApiException("未登录")
                 val res = ask("files.send", buildJson("sessionId" to sid, "path" to f.path), 180_000)
+                android.util.Log.d("DshRemote", "files.send 返回：$res")
                 val blobId = res.str("blobId") ?: throw ApiException("取回失败")
                 val bytes = api.downloadBlob(st.serverUrl, token, blobId)
+                android.util.Log.d("DshRemote", "blob 下载完成：${bytes.size} 字节")
                 val dir = File(getApplication<Application>().filesDir, "deliveries").apply { mkdirs() }
                 val out = File(dir, f.name)
                 out.writeBytes(bytes)
                 _state.update { it.copy(filesBusy = null, toast = "已保存 ${f.name}（${bytes.size / 1024}KB）") }
-                openLocalFile(out, res.str("mime") ?: "application/octet-stream")
+                if (f.name.lowercase().endsWith(".apk")) {
+                    // 安装包走安装器（顺带检查「安装未知应用」权限），不要当普通文件打开
+                    installApk(out)
+                } else {
+                    openLocalFile(out, res.str("mime") ?: "application/octet-stream")
+                }
             } catch (e: Exception) {
+                android.util.Log.e("DshRemote", "downloadFile 失败：${f.name}", e)
                 _state.update { it.copy(filesBusy = null, toast = e.message) }
             }
         }
@@ -821,9 +830,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun openLocalFile(file: File, mime: String) {
         runCatching {
             val ctx = getApplication<Application>()
+            // APK 必须用安装器 MIME，否则会被系统当成普通二进制丢给别的 App（实测被 Google Pay 抢走）
+            val type = if (file.name.lowercase().endsWith(".apk")) {
+                "application/vnd.android.package-archive"
+            } else {
+                mime.ifBlank { "*/*" }
+            }
             val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, mime)
+                setDataAndType(uri, type)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             ctx.startActivity(intent)
