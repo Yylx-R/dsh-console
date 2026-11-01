@@ -322,7 +322,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- 登录 ----------
     /** 装不上时的兜底：把安装包链接丢给系统浏览器（各家 ROM 对浏览器下载的 APK 更宽容） */
     fun installViaBrowser() {
-        val url = _state.value.update?.url ?: return
+        val st = _state.value
+        // 没查到更新信息时，退回服务器首页（首页就有最新 APK 下载入口）
+        val url = st.update?.url ?: st.serverUrl.ifBlank { return }
         runCatching {
             val ctx = getApplication<Application>()
             ctx.startActivity(
