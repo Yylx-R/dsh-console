@@ -62,6 +62,8 @@ data class UiState(
     val sessions: List<SessionInfo> = emptyList(),
     val currentSession: SessionInfo? = null,
     val messages: List<ChatMessage> = emptyList(),
+    // 输入框草稿（按会话保存，返回/重启都不丢）
+    val draft: String = "",
     val streaming: Boolean = false,
     val connected: Boolean = false,
     val busy: Boolean = false,
@@ -479,6 +481,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 it.copy(
                     screen = Screen.Chat, currentSession = s,
                     messages = emptyList(), streaming = s.running,
+                    draft = prefs.getString(draftKey(s.sessionId), "") ?: "",
                 )
             }
             try {
@@ -509,7 +512,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun leaveChat() {
         viewModelScope.launch { unsubscribe() }
-        _state.update { it.copy(screen = Screen.Sessions, currentSession = null, messages = emptyList(), streaming = false) }
+        _state.update { it.copy(screen = Screen.Sessions, currentSession = null, messages = emptyList(), streaming = false, draft = "") }
+    }
+
+    private fun draftKey(sessionId: String?) = "draft:" + (sessionId ?: "__new")
+
+    /** 输入框内容变化：内存 + 磁盘各存一份，退出/杀进程都不丢 */
+    fun setDraft(text: String) {
+        _state.update { it.copy(draft = text) }
+        prefs.edit().putString(draftKey(_state.value.currentSession?.sessionId), text).apply()
+    }
+
+    private fun clearDraft() {
+        _state.update { it.copy(draft = "") }
+        prefs.edit().remove(draftKey(_state.value.currentSession?.sessionId)).apply()
     }
 
     private suspend fun unsubscribe() {
@@ -534,6 +550,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val staged = st.staged
         if (t.isEmpty() && staged.isEmpty()) return
         val names = staged.map { it.name }
+        clearDraft()
         _state.update {
             it.copy(
                 messages = it.messages + ChatMessage("user", t, attachNames = names),
@@ -626,7 +643,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }.getOrNull()
 
     // ---------- 电脑画面 ----------
-    fun openScreenView() {
+    /**
+     * 打开「电脑画面」。peer 不为空时先把执行目标切到这台电脑，
+     * 否则从设备列表点某台电脑的截图按钮时，会拍到上一次选中的那台（两台电脑串台）。
+     */
+    fun openScreenView(peer: PairInfo? = null) {
+        if (peer != null && peer.peerId != _state.value.target?.peerId) {
+            socket.setTarget(peer.peerId)
+            _state.update { it.copy(target = peer) }
+        }
         _state.update { it.copy(screenReturn = it.screen, screen = Screen.ScreenView, shot = null) }
         captureScreen()
     }

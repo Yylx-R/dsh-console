@@ -99,7 +99,6 @@ import java.io.File
 @Composable
 fun ChatScreen(vm: AppViewModel, st: UiState) {
     val listState = rememberLazyListState()
-    var input by rememberSaveable { mutableStateOf("") }
     var panel by remember { mutableStateOf(false) }
     var cameraOpen by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
@@ -150,6 +149,8 @@ fun ChatScreen(vm: AppViewModel, st: UiState) {
             title = st.currentSession?.title?.ifBlank { "会话" } ?: "会话",
             subtitle = st.currentSession?.cwd,
             onBack = vm::back,
+            onTitleLongPress = { copyText(st.currentSession?.sessionId.orEmpty()) },
+            onSubtitleLongPress = { copyText(st.currentSession?.cwd.orEmpty()) },
             actions = {
                 if (st.streaming) {
                     CircularProgressIndicator(
@@ -211,8 +212,8 @@ fun ChatScreen(vm: AppViewModel, st: UiState) {
 
         InputBar(
             st = st,
-            text = input,
-            onTextChange = { input = it },
+            text = st.draft,
+            onTextChange = vm::setDraft,
             panelOpen = panel,
             onTogglePanel = {
                 panel = !panel
@@ -223,9 +224,8 @@ fun ChatScreen(vm: AppViewModel, st: UiState) {
             },
             onFocusInput = { panel = false },
             onSend = {
-                val t = input.trim()
+                val t = st.draft.trim()
                 if (t.isNotEmpty() || st.staged.isNotEmpty()) {
-                    input = ""
                     panel = false
                     vm.send(t)
                 }

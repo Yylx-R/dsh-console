@@ -1,7 +1,10 @@
 package com.dshremote.app.ui
 
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,6 +46,7 @@ import com.dshremote.app.data.SessionInfo
 
 @Composable
 fun SessionsScreen(vm: AppViewModel, st: UiState) {
+    val ctx = LocalContext.current
     val target = st.target
     Column(Modifier.fillMaxSize()) {
         DshTopBar(
@@ -87,7 +92,11 @@ fun SessionsScreen(vm: AppViewModel, st: UiState) {
                     contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp),
                 ) {
                     items(st.sessions, key = { it.sessionId }) { s ->
-                        SessionRow(s) { vm.openSession(s) }
+                        SessionRow(s, onClick = { vm.openSession(s) }, onLongClick = {
+                            val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("会话 ID", s.sessionId))
+                            Toast.makeText(ctx, "已复制会话 ID", Toast.LENGTH_SHORT).show()
+                        })
                     }
                 }
             }
@@ -115,12 +124,13 @@ fun SessionsScreen(vm: AppViewModel, st: UiState) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SessionRow(s: SessionInfo, onClick: () -> Unit) {
+private fun SessionRow(s: SessionInfo, onClick: () -> Unit, onLongClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 20.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

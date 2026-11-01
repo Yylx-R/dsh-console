@@ -1,6 +1,8 @@
 package com.dshremote.app.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,12 +47,15 @@ fun DshBackground(content: @Composable () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DshTopBar(
     title: String,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onTitleLongPress: (() -> Unit)? = null,
+    onSubtitleLongPress: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
@@ -79,6 +84,11 @@ fun DshTopBar(
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = if (onTitleLongPress != null) {
+                    Modifier.combinedClickable(onClick = {}, onLongClick = onTitleLongPress)
+                } else {
+                    Modifier
+                },
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
@@ -87,6 +97,11 @@ fun DshTopBar(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = if (onSubtitleLongPress != null) {
+                        Modifier.combinedClickable(onClick = {}, onLongClick = onSubtitleLongPress)
+                    } else {
+                        Modifier
+                    },
                 )
             }
         }

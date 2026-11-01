@@ -113,7 +113,7 @@ fun DevicesScreen(vm: AppViewModel, st: UiState) {
             }
             itemsIndexed(st.pairs.filter { it.peerKind == "desktop" }, key = { _, it -> it.pairId }) { idx, it ->
                 Column {
-                    DesktopRow(it, onScreen = { vm.openScreenView() }) { vm.selectTarget(it) }
+                    DesktopRow(it, onScreen = { vm.openScreenView(it) }) { vm.selectTarget(it) }
                     if (idx < st.pairs.count { p -> p.peerKind == "desktop" } - 1) {
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 76.dp, end = 20.dp),
