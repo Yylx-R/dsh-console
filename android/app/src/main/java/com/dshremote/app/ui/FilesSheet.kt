@@ -2,6 +2,7 @@ package com.dshremote.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -103,7 +104,12 @@ fun FilesSheet(vm: AppViewModel, st: UiState) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.55f)),
+            .background(Color.Black.copy(alpha = 0.55f))
+            // 点遮罩空白处关闭（不要让点击穿透到后面的列表）
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) { vm.closeFiles() },
         contentAlignment = Alignment.BottomCenter,
     ) {
         Surface(
@@ -111,7 +117,12 @@ fun FilesSheet(vm: AppViewModel, st: UiState) {
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.76f),
+                .fillMaxHeight(0.76f)
+                // 吃掉点击，避免点在面板上也被当成"点遮罩"
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                ) {},
         ) {
             Column(Modifier.fillMaxSize()) {
                 Row(

@@ -1,4 +1,4 @@
-# 一键发布手机 App
+﻿# 一键发布手机 App
 #   1) 读 app/build.gradle.kts 里的 versionName / versionCode
 #   2) 编译 debug APK
 #   3) 生成 public/app/latest.json（App 内「检查更新」读这个文件）

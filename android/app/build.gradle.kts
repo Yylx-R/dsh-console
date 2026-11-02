@@ -16,8 +16,8 @@ android {
         applicationId = "com.dshremote.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "0.13.3"
+        versionCode = 18
+        versionName = "0.14.0"
     }
 
     signingConfigs {

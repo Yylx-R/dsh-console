@@ -17,6 +17,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +31,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -123,19 +125,23 @@ fun ChatScreen(vm: AppViewModel, st: UiState) {
         u?.let { vm.addAttachment(it) }
     }
 
+    // 是否贴在底部：只有原本就在底部时才自动跟随，避免翻历史时被拽回去
+    val nearBottom: () -> Boolean = {
+        val info = listState.layoutInfo
+        val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+        lastVisible >= st.messages.lastIndex - 1
+    }
+
     // 新消息 / 流式增长：跟着最新一条走
     LaunchedEffect(st.messages.size, lastLen) {
-        if (st.messages.isNotEmpty()) listState.scrollToItem(st.messages.lastIndex)
+        if (st.messages.isNotEmpty() && nearBottom()) listState.scrollToItem(st.messages.lastIndex)
     }
 
     // 键盘弹出：把最后一条顶到键盘上方（微信的行为）；用户正翻历史时不打扰
     val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
     LaunchedEffect(imeBottom > 0) {
-        if (imeBottom > 0 && st.messages.isNotEmpty()) {
-            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            if (lastVisible >= st.messages.lastIndex - 2) {
-                listState.animateScrollToItem(st.messages.lastIndex)
-            }
+        if (imeBottom > 0 && st.messages.isNotEmpty() && nearBottom()) {
+            listState.scrollToItem(st.messages.lastIndex)
         }
     }
 
@@ -144,7 +150,7 @@ fun ChatScreen(vm: AppViewModel, st: UiState) {
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(
-                    WindowInsets.navigationBars.union(WindowInsets.ime).only(WindowInsetsSides.Bottom),
+                    WindowInsets.navigationBars.only(WindowInsetsSides.Bottom),
                 ),
         ) {
         DshTopBar(
@@ -213,13 +219,27 @@ fun ChatScreen(vm: AppViewModel, st: UiState) {
                     MessageRow(m, streaming = st.streaming && index == st.messages.lastIndex, onCopy = copyText)
                 }
             }
+            // 展开「+」面板时，点对话区任意位置收起
+            if (panel) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                        ) { panel = false },
+                )
+            }
         }
 
-        if (st.staged.isNotEmpty()) {
-            StagedRow(st.staged, onRemove = vm::removeStaged)
-        }
+        // 底部区（待发送 + 输入栏）单独吃键盘 inset：只让输入栏跟着键盘上移，
+        // 对话区高度不变，避免"键盘一弹对话整体往下滑"
+        Column(Modifier.imePadding()) {
+            if (st.staged.isNotEmpty()) {
+                StagedRow(st.staged, onRemove = vm::removeStaged)
+            }
 
-        InputBar(
+            InputBar(
             st = st,
             text = st.draft,
             onTextChange = vm::setDraft,
@@ -255,7 +275,8 @@ fun ChatScreen(vm: AppViewModel, st: UiState) {
                 panel = false
                 vm.openFiles()
             },
-        )
+            )
+        }
         }
 
         if (cameraOpen) {
