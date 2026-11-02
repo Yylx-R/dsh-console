@@ -144,6 +144,14 @@ fun FilesSheet(vm: AppViewModel, st: UiState) {
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (st.filesProgress.isNotBlank()) {
+                            Text(
+                                st.filesProgress,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                            )
+                        }
                     }
                     IconButton(onClick = { vm.refreshFiles() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "刷新", modifier = Modifier.size(20.dp))

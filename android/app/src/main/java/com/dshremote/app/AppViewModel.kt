@@ -104,6 +104,8 @@ data class UiState(
     val filesCwd: String = "",
     val files: List<RemoteFile> = emptyList(),
     val filesBusy: String? = null,
+    /** 交付物下载进度文案（空 = 未在下载） */
+    val filesProgress: String = "",
     /** true = 总览模式（按会话分组，从会话列表右上角进入） */
     val filesOverview: Boolean = false,
     val fileGroups: List<FileGroup> = emptyList(),
@@ -704,7 +706,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     60_000,
                 )
                 val blobId = res.str("blobId") ?: throw ApiException("截图失败")
-                val bytes = api.downloadBlob(st.serverUrl, token, blobId)
+                val bytes = api.downloadBlob(st.serverUrl, token, blobId) { done, total ->
+                    val text = if (total > 0) "下载中 ${done * 100 / total}%（${done / 1024 / 1024} / ${total / 1024 / 1024} MB）" else "下载中 ${done / 1024} KB"
+                    _state.update { it.copy(filesProgress = text) }
+                }
                 val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     ?: throw ApiException("截图解码失败")
                 _state.update {
@@ -808,12 +813,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val res = ask("files.send", buildJson("sessionId" to sid, "path" to f.path), 180_000)
                 android.util.Log.d("DshRemote", "files.send 返回：$res")
                 val blobId = res.str("blobId") ?: throw ApiException("取回失败")
-                val bytes = api.downloadBlob(st.serverUrl, token, blobId)
+                val bytes = api.downloadBlob(st.serverUrl, token, blobId) { done, total ->
+                    val text = if (total > 0) "下载中 ${done * 100 / total}%（${done / 1024 / 1024} / ${total / 1024 / 1024} MB）" else "下载中 ${done / 1024} KB"
+                    _state.update { it.copy(filesProgress = text) }
+                }
                 android.util.Log.d("DshRemote", "blob 下载完成：${bytes.size} 字节")
                 val dir = File(getApplication<Application>().filesDir, "deliveries").apply { mkdirs() }
                 val out = File(dir, f.name)
                 out.writeBytes(bytes)
-                _state.update { it.copy(filesBusy = null, toast = "已保存 ${f.name}（${bytes.size / 1024}KB）") }
+                _state.update { it.copy(filesBusy = null, filesProgress = "", toast = "已保存 ${f.name}（${bytes.size / 1024}KB）") }
                 if (f.name.lowercase().endsWith(".apk")) {
                     // 安装包走安装器（顺带检查「安装未知应用」权限），不要当普通文件打开
                     installApk(out)
@@ -822,7 +830,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
             } catch (e: Exception) {
                 android.util.Log.e("DshRemote", "downloadFile 失败：${f.name}", e)
-                _state.update { it.copy(filesBusy = null, toast = e.message) }
+                _state.update { it.copy(filesBusy = null, filesProgress = "", toast = e.message) }
             }
         }
     }

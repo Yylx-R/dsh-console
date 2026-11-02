@@ -135,7 +135,12 @@ class HttpApi {
     }
 
     /** 从服务器拉取 blob 原始字节（截图等）。 */
-    suspend fun downloadBlob(serverUrl: String, token: String, blobId: String): ByteArray =
+    suspend fun downloadBlob(
+        serverUrl: String,
+        token: String,
+        blobId: String,
+        onProgress: ((Long, Long) -> Unit)? = null,
+    ): ByteArray =
         withContext(Dispatchers.IO) {
             val req = Request.Builder()
                 .url("${base(serverUrl)}/api/blob/${java.net.URLEncoder.encode(blobId, "UTF-8")}")
@@ -152,7 +157,25 @@ class HttpApi {
             }
             res.use {
                 if (!res.isSuccessful) throw ApiException("下载失败 HTTP ${res.code}")
-                res.body?.bytes() ?: throw ApiException("下载内容为空")
+                val body = res.body ?: throw ApiException("下载内容为空")
+                val total = body.contentLength()
+                if (onProgress == null) {
+                    body.bytes()
+                } else {
+                    val buf = ByteArray(64 * 1024)
+                    val out = java.io.ByteArrayOutputStream(if (total > 0) total.toInt() else 1 shl 20)
+                    body.byteStream().use { input ->
+                        var done = 0L
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n <= 0) break
+                            out.write(buf, 0, n)
+                            done += n
+                            onProgress.invoke(done, total)
+                        }
+                    }
+                    out.toByteArray()
+                }
             }
         }
 }
